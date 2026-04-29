@@ -1,22 +1,8 @@
 title: "4KHD"
-version: "0.1.0"
+version: "0.2.0"
 package_name: ff_4khd
-developer: Antigravity
+developer: DaeGumi
 description: 4KHD.com 화보 및 영상 뷰어/다운로더
 author: DaeGumi w/Antigravity Gemini
 home: https://github.com/fromhd/ff_4khd
 more: https://github.com/fromhd/ff_4khd/blob/main/readme.md
-
-setting:
-  - name: 4khd_url
-    default: https://4khd.com
-    type: text
-    description: 사이트 주소
-  - name: proxy_enabled
-    default: 'True'
-    type: bool
-    description: 이미지 프록시 사용
-  - name: download_path
-    default: ''
-    type: text
-    description: 다운로드 경로 (비워두면 플러그인 폴더 내 downloads 사용)
