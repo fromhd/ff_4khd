@@ -49,46 +49,68 @@ class Logic4KHD:
         return url
 
     @staticmethod
-    def get_list(base_url, page=1, search="", category=""):
-        """게시물 목록을 가져옵니다 (검색 지원)"""
+    def _discover_url(url):
+        """4khd.com 접속 시 리다이렉트되는 최종 주소를 반환합니다."""
+        if not url or '4khd.com' not in url:
+            return url
         try:
-            # API는 카테고리/인기 구분이 모호하므로, 카테고리가 있으면 바로 파싱 시도
+            session = Logic4KHD.get_session()
+            res = session.get(url, headers=Logic4KHD.HEADERS, timeout=10, allow_redirects=True)
+            if res.status_code == 200:
+                final_url = '/'.join(res.url.split('/')[:3])
+                return final_url
+        except: pass
+        return url
+
+    @staticmethod
+    def get_list(base_url=None, page=1, search="", category=""):
+        """게시물 목록을 가져옵니다 (스마트 캐싱 적용)"""
+        real_base = base_url if base_url and '4khd.com' not in base_url else None
+        new_discovered = None
+
+        # 1. 주소가 없거나 4khd.com(대문)인 경우 새로 탐지 시도
+        if not real_base:
+            real_base = Logic4KHD._discover_url(Logic4KHD.PORTAL_URL)
+            new_discovered = real_base
+
+        try:
+            # 리스트 가져오기 시도
+            data = Logic4KHD._fetch_list_with_fallback(real_base, page, search, category)
+            
+            # 만약 결과가 없는데, 현재 주소가 대문이 아니라면 주소가 바뀌었을 가능성 염두
+            if not data and real_base != Logic4KHD.PORTAL_URL:
+                print(f"[4KHD] Current URL {real_base} seems dead. Retrying discovery...")
+                real_base = Logic4KHD._discover_url(Logic4KHD.PORTAL_URL)
+                new_discovered = real_base
+                data = Logic4KHD._fetch_list_with_fallback(real_base, page, search, category)
+            
+            return data, new_discovered
+        except Exception as e:
+            print(f"[4KHD] get_list error: {e}")
+            return [], None
+
+    @staticmethod
+    def _fetch_list_with_fallback(base_url, page, search, category):
+        """API 또는 HTML 파싱을 통해 리스트를 가져오는 내부 메서드"""
+        try:
+            # 카테고리는 HTML 파싱 우선
             if category:
                 return Logic4KHD.parse_html_list(base_url, page, search, category)
 
-            api_url = f"{base_url.rstrip('/')}/wp-json/wp/v2/posts"
+            # 최신/검색은 API 시도
             session = Logic4KHD.get_session()
-            params = {
-                'page': page,
-                'per_page': 20,
-                '_embed': 1,
-                'orderby': 'date'
-            }
-            if search:
-                params['search'] = search
+            api_url = f"{base_url.rstrip('/')}/wp-json/wp/v2/posts"
+            params = {'page': page, 'per_page': 20, '_embed': 1, 'orderby': 'date'}
+            if search: params['search'] = search
             
-            response = None
-            try:
-                # staticmethod 내에서는 print나 전역 로거 참조
-                response = session.get(api_url, params=params, headers=Logic4KHD.HEADERS, timeout=20)
-            except Exception as e:
-                print(f"[4KHD] API primary try failed: {type(e).__name__}")
-                try:
-                    import urllib3
-                    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-                    response = session.get(api_url, params=params, headers=Logic4KHD.HEADERS, timeout=20, verify=False)
-                except Exception as e2:
-                    print(f"[4KHD] API secondary try failed: {type(e2).__name__}")
-            
-            if response and response.status_code == 200:
-                posts = response.json()
+            res = session.get(api_url, params=params, headers=Logic4KHD.HEADERS, timeout=12)
+            if res.status_code == 200:
+                posts = res.json()
                 results = []
                 for post in posts:
                     item = {
-                        'id': post['id'],
-                        'title': post['title']['rendered'],
-                        'url': post['link'],
-                        'thumbnail': ''
+                        'id': post['id'], 'title': post['title']['rendered'],
+                        'url': post['link'], 'thumbnail': ''
                     }
                     try:
                         thumb = None
@@ -102,13 +124,8 @@ class Logic4KHD:
                     except: pass
                     results.append(item)
                 return results
-            else:
-                if response:
-                    print(f"[4KHD] API status_code: {response.status_code}")
-                return Logic4KHD.parse_html_list(base_url, page, search, category)
-        except Exception as e:
-            print(f"[4KHD] get_list error: {type(e).__name__}")
-            return Logic4KHD.parse_html_list(base_url, page, search, category)
+        except: pass
+        return Logic4KHD.parse_html_list(base_url, page, search, category)
 
     @staticmethod
     def extract_images_from_html(html):
@@ -117,71 +134,86 @@ class Logic4KHD:
         soup = BeautifulSoup(html, 'html.parser')
         images = []
         for img in soup.select('img'):
-            # 우선순위: data-src > data-lazy-src > src
-            src = img.get('data-src') or img.get('data-lazy-src') or img.get('src')
+            src = img.get('data-src') or img.get('data-lazy-src') or img.get('srcset') or img.get('src')
             if src:
+                if ',' in src: src = src.split(',')[0].split(' ')[0] # srcset 대응
                 images.append(src)
-        
-        # a 태그에 감싸진 이미지 링크
-        for a in soup.select('a[href]'):
-            href = a.get('href')
-            if href and re.search(r'\.(jpe?g|png|webp|gif)', href, re.I):
-                if href not in images:
-                    images.append(href)
         return images
 
     @staticmethod
     def parse_html_list(base_url, page=1, search="", category=""):
-        """HTML 파싱을 통한 목록 추출 (카테고리 및 페이징 대응)"""
+        """HTML 파싱을 통한 목록 추출 (페이징 완벽 대응)"""
         base_url = base_url.rstrip('/')
         
+        # 주소 생성 (리다이렉트된 최종 도메인 기준)
+        urls = []
         if search:
-            # 검색 경로: /search/검색어/page/번호
             if page > 1:
-                url = f"{base_url}/search/{search}/page/{page}"
+                # 다양한 검색 페이징 패턴 시도
+                urls.append(f"{base_url}/page/{page}/?s={search}")
+                urls.append(f"{base_url}/search/{search}/page/{page}/")
+                urls.append(f"{base_url}/?s={search}&paged={page}")
+                urls.append(f"{base_url}/?s={search}&page={page}")
             else:
-                url = f"{base_url}/search/{search}"
+                urls.append(f"{base_url}/search/{search}/")
+                urls.append(f"{base_url}/?s={search}")
         elif category:
-            # 인기, 코스플레이, 앨범 경로
-            # 페이징 형식: /category?query-3-page=2
-            url = f"{base_url}/{category}"
             if page > 1:
-                url = f"{base_url}/{category}?query-3-page={page}"
+                urls.append(f"{base_url}/{category}/?query-3-page={page}")
+                urls.append(f"{base_url}/{category}/page/{page}/")
+                urls.append(f"{base_url}/{category}/?paged={page}")
+            else:
+                urls.append(f"{base_url}/{category}/")
         else:
-            # 최신 목록 (최신은 페이지만 넘기지 않음)
-            url = f"{base_url}/"
+            urls = [f"{base_url}/page/{page}/" if page > 1 else f"{base_url}/"]
         
         try:
             session = Logic4KHD.get_session()
-            res = session.get(url, headers=Logic4KHD.HEADERS, timeout=15)
+            res = None
+            for idx, url in enumerate(urls):
+                try:
+                    res = session.get(url, headers=Logic4KHD.HEADERS, timeout=12)
+                    if res.status_code == 200:
+                        # 페이지 튕김 방지 검증 (2페이지 이상 요청했는데 1페이지로 리다이렉트 되었는지 확인)
+                        if page > 1 and not any(p in res.url for p in [f"page/{page}", f"paged={page}", "query-"]):
+                            continue
+                        break
+                except: continue
             
-            # 404 발생 시 'serach' 오타 대응
-            if res.status_code == 404 and search:
-                alt_url = url.replace('/search/', '/serach/')
-                res = session.get(alt_url, headers=Logic4KHD.HEADERS, timeout=15)
+            if not res or res.status_code != 200: return []
 
             soup = BeautifulSoup(res.text, 'html.parser')
-            # 게시물 선택자 보강
-            posts = soup.select('li.wp-block-post, article.post, div.wp-block-post, article')
+            # 본문 게시물 선택자 강화
+            container = soup.select_one('.wp-block-post-template, main, #primary, #content') or soup
+            posts = container.select('li.wp-block-post, article.post, div.wp-block-post, article, .grid-item')
+            
             results = []
             for post in posts:
                 try:
-                    title_tag = post.select_one('h2 a, h3 a, .entry-title a')
+                    title_tag = post.select_one('h2 a, h3 a, .entry-title a, .wp-block-post-title a')
                     if not title_tag: continue
                     
                     img_tag = post.select_one('img')
                     thumb = ''
                     if img_tag:
-                        thumb = img_tag.get('data-src') or img_tag.get('data-lazy-src') or img_tag.get('src', '')
-                    
-                    results.append({
+                        # 모든 지연 로딩 속성 탐색
+                        thumb = (img_tag.get('data-src') or img_tag.get('data-lazy-src') or 
+                                 img_tag.get('srcset') or img_tag.get('src', ''))
+                        if ',' in thumb: thumb = thumb.split(',')[0].split(' ')[0]
+
+                    item = {
                         'title': title_tag.get_text(strip=True),
                         'url': title_tag['href'],
                         'thumbnail': Logic4KHD.normalize_image_url(thumb, for_thumbnail=True),
                         'id': title_tag['href'].strip('/').split('/')[-1]
-                    })
+                    }
+                    if not any(r['id'] == item['id'] for r in results):
+                        results.append(item)
                 except: continue
             return results
+        except Exception as e:
+            print(f"[4KHD] parse_html_list error: {e}")
+            return []
         except Exception as e:
             print(f"[4KHD] parse_html_list error: {e}")
             return []

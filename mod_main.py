@@ -70,8 +70,16 @@ class ModuleMain(PluginModuleBase):
                 page = int(req.form.get('page', 1))
                 search = req.form.get('search', '')
                 category = req.form.get('category', '')
-                base_url = self.P.ModelSetting.get('4khd_url')
-                data = Logic4KHD.get_list(base_url=base_url, page=page, search=search, category=category)
+                
+                # DB에서 현재 주소를 가져와서 넘김 (없으면 대문 주소 기본값)
+                current_base = self.P.ModelSetting.get('4khd_url') or 'https://4khd.com'
+                data, new_base = Logic4KHD.get_list(base_url=current_base, page=page, search=search, category=category)
+                
+                # 새로운 주소가 발견되면 DB 업데이트
+                if new_base and new_base != current_base:
+                    self.P.logger.info(f'[4KHD] New Active URL discovered and saved: {new_base}')
+                    self.P.ModelSetting.set('4khd_url', new_base)
+                
                 if self.P.ModelSetting.get_bool('proxy_enabled'):
                     for item in data:
                         if item.get('thumbnail'):
