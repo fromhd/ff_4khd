@@ -6,9 +6,8 @@
   <form id='setting'>
     <div class="tab-content">
       <div class="alert alert-primary">
-        <i class="fa fa-info-circle"></i> <b>스마트 캐싱:</b> 접속이 안 될 때만 <code>4khd.com</code>을 통해 새 주소를 찾아냅니다. (아래 주소는 자동 업데이트됩니다.)
+        <i class="fa fa-info-circle"></i> <b>자동 주소 탐지 작동 중:</b> 현재 플러그인이 <code>4khd.com</code>을 통해 최신 접속 주소를 자동으로 찾아 사용하고 있습니다. 별도로 주소를 입력하실 필요가 없습니다.
       </div>
-      {{ macros.setting_input_text('4khd_url', '자동 탐지된 주소', value=arg['4khd_url']) }}
       {{ macros.setting_input_text('download_path', '다운로드 경로', value=arg['download_path']) }}
       {{ macros.setting_checkbox('proxy_enabled', '이미지 프록시 사용', value=arg['proxy_enabled']) }}
     </div>
