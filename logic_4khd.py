@@ -64,53 +64,32 @@ class Logic4KHD:
 
     @staticmethod
     def get_list(base_url=None, page=1, search="", category=""):
-        """게시물 목록을 가져옵니다 (스마트 캐싱 적용)"""
-        real_base = base_url if base_url and '4khd.com' not in base_url else None
-        new_discovered = None
-
-        # 1. 주소가 없거나 4khd.com(대문)인 경우 새로 탐지 시도
-        if not real_base:
-            real_base = Logic4KHD._discover_url(Logic4KHD.PORTAL_URL)
-            new_discovered = real_base
-
+        """게시물 목록을 가져옵니다 (리다이렉트 자동 대응)"""
+        # 1. 실제 접속할 미러 주소 파악 (설정값이 없으면 기본 대문 주소 사용)
+        start_url = base_url if base_url and 'http' in base_url else Logic4KHD.BASE_URL
+        real_base = Logic4KHD._discover_url(start_url)
+        
         try:
-            # 리스트 가져오기 시도
-            data = Logic4KHD._fetch_list_with_fallback(real_base, page, search, category)
-            
-            # 만약 결과가 없는데, 현재 주소가 대문이 아니라면 주소가 바뀌었을 가능성 염두
-            if not data and real_base != Logic4KHD.PORTAL_URL:
-                print(f"[4KHD] Current URL {real_base} seems dead. Retrying discovery...")
-                real_base = Logic4KHD._discover_url(Logic4KHD.PORTAL_URL)
-                new_discovered = real_base
-                data = Logic4KHD._fetch_list_with_fallback(real_base, page, search, category)
-            
-            return data, new_discovered
-        except Exception as e:
-            print(f"[4KHD] get_list error: {e}")
-            return [], None
-
-    @staticmethod
-    def _fetch_list_with_fallback(base_url, page, search, category):
-        """API 또는 HTML 파싱을 통해 리스트를 가져오는 내부 메서드"""
-        try:
-            # 카테고리는 HTML 파싱 우선
+            # 카테고리 요청은 HTML 파싱이 더 정확함 (슬러그 변동 대응)
             if category:
-                return Logic4KHD.parse_html_list(base_url, page, search, category)
+                return Logic4KHD.parse_html_list(real_base, page, search, category)
 
-            # 최신/검색은 API 시도
+            # 최신 목록은 API 시도
+            api_url = f"{real_base.rstrip('/')}/wp-json/wp/v2/posts"
             session = Logic4KHD.get_session()
-            api_url = f"{base_url.rstrip('/')}/wp-json/wp/v2/posts"
             params = {'page': page, 'per_page': 20, '_embed': 1, 'orderby': 'date'}
             if search: params['search'] = search
             
-            res = session.get(api_url, params=params, headers=Logic4KHD.HEADERS, timeout=12)
-            if res.status_code == 200:
-                posts = res.json()
+            response = session.get(api_url, params=params, headers=Logic4KHD.HEADERS, timeout=15)
+            if response.status_code == 200:
+                posts = response.json()
                 results = []
                 for post in posts:
                     item = {
-                        'id': post['id'], 'title': post['title']['rendered'],
-                        'url': post['link'], 'thumbnail': ''
+                        'id': post['id'],
+                        'title': post['title']['rendered'],
+                        'url': post['link'],
+                        'thumbnail': ''
                     }
                     try:
                         thumb = None
@@ -124,8 +103,10 @@ class Logic4KHD:
                     except: pass
                     results.append(item)
                 return results
-        except: pass
-        return Logic4KHD.parse_html_list(base_url, page, search, category)
+            
+            return Logic4KHD.parse_html_list(real_base, page, search, category)
+        except:
+            return Logic4KHD.parse_html_list(real_base, page, search, category)
 
     @staticmethod
     def extract_images_from_html(html):
