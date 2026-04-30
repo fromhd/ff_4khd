@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block content %}
+<div>
+  {{ macros.m_button_group([['global_setting_save_btn', '저장'], ['global_one_execute_btn', '최신 주소 불러오기']]) }}
+  <hr>
+  <form id="setting">
+    <div class="tab-content">
+      <div class="alert alert-primary">
+        <i class="fa fa-info-circle"></i>
+        <b>자동 주소 탐지 사용 중</b>
+        목록을 불러올 때 저장된 주소가 <code>4khd.com</code> 계열이면 실제 리다이렉트 주소를 자동 확인합니다.
+        주소가 바뀐 것 같으면 <b>최신 주소 불러오기</b>를 눌러 현재 주소를 저장하세요.
+      </div>
+      {{ macros.setting_input_text('4khd_url', '현재 4KHD 주소', value=arg['4khd_url']) }}
+      {{ macros.setting_input_text('download_path', '다운로드 경로', value=arg['download_path']) }}
+      {{ macros.setting_checkbox('proxy_enabled', '이미지 프록시 사용', value=arg['proxy_enabled']) }}
+    </div>
+  </form>
+</div>
+
+<script type="text/javascript">
+const package_name = "{{ arg['package_name'] }}";
+
+function settingFormData() {
+    const data = $('#setting').serializeArray();
+    if (!data.some(item => item.name === 'proxy_enabled')) {
+        data.push({ name: 'proxy_enabled', value: 'False' });
+    }
+    return $.param(data);
+}
+
+$(document).ready(function(){
+    $(document).on('click', '#global_setting_save_btn', function(e){
+        e.preventDefault();
+
+        $.ajax({
+            url: '/' + package_name + '/ajax/setting_save',
+            type: 'POST',
+            data: settingFormData(),
+            success: function (data) {
+                if (data) {
+                    $.notify('<strong>저장했습니다.</strong>', {type: 'success'});
+                } else {
+                    $.notify('<strong>저장 실패</strong>', {type: 'warning'});
+                }
+            },
+            error: function() {
+                $.notify('<strong>서버 통신 오류</strong>', {type: 'danger'});
+            }
+        });
+    });
+
+    $(document).on('click', '#global_one_execute_btn', function(e){
+        e.preventDefault();
+        const btn = $(this);
+        btn.prop('disabled', true);
+
+        $.ajax({
+            url: '/' + package_name + '/ajax/discover_url',
+            type: 'POST',
+            success: function (data) {
+                if (data && data.ret === 'success') {
+                    $('[name="4khd_url"]').val(data.url);
+                    $.notify('<strong>최신 주소 저장 완료:</strong> ' + data.url, {type: 'success'});
+                } else {
+                    $.notify('<strong>주소 확인 실패</strong>', {type: 'warning'});
+                }
+            },
+            error: function() {
+                $.notify('<strong>서버 통신 오류</strong>', {type: 'danger'});
+            },
+            complete: function() {
+                btn.prop('disabled', false);
+            }
+        });
+    });
+});
+</script>
+{% endblock %}
