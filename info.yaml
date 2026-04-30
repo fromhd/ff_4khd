@@ -1,8 +1,8 @@
-title: "4KHD_codex"
+title: "4KHD"
 version: "0.3.0"
-package_name: ff_4khd_codex
+package_name: ff_4khd
 developer: DaeGumi
 description: 4KHD.com 화보 및 영상 뷰어/다운로더
 author: DaeGumi w/Antigravity Gemini
-home: https://github.com/fromhd/ff_4khd
-more: https://github.com/fromhd/ff_4khd/blob/main/readme.md
+home: https://gitea.oc.nowzz.pp.ua/daegumi/ff_4khd
+more: https://gitea.oc.nowzz.pp.ua/daegumi/ff_4khd/src/branch/main/readme.md
