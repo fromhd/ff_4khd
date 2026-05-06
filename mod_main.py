@@ -14,7 +14,7 @@ class ModuleMain(PluginModuleBase):
     def __init__(self, P):
         super(ModuleMain, self).__init__(P, name="main")
         self.db_default = {
-            '4khd_url': 'https://gghh.uk',
+            '4khd_url': 'https://uuss.uk',
             'proxy_enabled': 'True',
             'download_path': os.path.join(os.getcwd(), 'downloads', 'ff_4khd'),
         }
@@ -201,19 +201,10 @@ class ModuleMain(PluginModuleBase):
 
     def _get_effective_base_url(self):
         base_url = self.P.ModelSetting.get('4khd_url') or Logic4KHD.BASE_URL
-        if not Logic4KHD.is_supported_base_url(base_url):
-            discovered_url = Logic4KHD.discover_url('https://4khd.com')
-            self._set_setting('4khd_url', discovered_url)
-            return discovered_url
-
-        if '4khd.com' not in base_url:
+        # 저장된 URL이 유효하면 바로 사용 (discovery로 덮어쓰지 않음)
+        if base_url and 'http' in base_url:
             return base_url
-
-        discovered_url = Logic4KHD.discover_url('https://4khd.com')
-        if discovered_url and discovered_url != base_url:
-            self._set_setting('4khd_url', discovered_url)
-            return discovered_url
-        return base_url
+        return Logic4KHD.BASE_URL
 
     def _setting_request_with_defaults(self, req):
         if 'proxy_enabled' in req.form:
