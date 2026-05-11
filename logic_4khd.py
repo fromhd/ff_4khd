@@ -181,68 +181,14 @@ class Logic4KHD:
 
     @staticmethod
     def get_list(base_url=None, page=1, search="", category=""):
-        """게시물 목록 (WP REST API 우선, images 포함)"""
-        real_base = base_url if base_url and 'http' in base_url else Logic4KHD.BASE_URL
-
+        start_url = base_url if base_url and 'http' in base_url else Logic4KHD.BASE_URL
+        real_base = Logic4KHD._discover_url(start_url)
         try:
-            if category:
-                return Logic4KHD.parse_html_list(real_base, page, search, category)
-
-            # WP REST API — content.rendered 에서 이미지 직접 추출
-            api_url = f"{real_base.rstrip('/')}/wp-json/wp/v2/posts"
-            session = Logic4KHD.get_session()
-            params = {'page': page, 'per_page': 20, '_embed': 1, 'orderby': 'date'}
-            if search:
-                params['search'] = search
-
-            response = session.get(api_url, params=params, headers=Logic4KHD.HEADERS, timeout=15)
-            if response.status_code == 200:
-                posts = response.json()
-                results = []
-                for post in posts:
-                    # API content에서 이미지 직접 추출
-                    content_html = ''
-                    try:
-                        content_html = post['content']['rendered']
-                    except:
-                        pass
-
-                    all_images = []
-                    for img_url in Logic4KHD.extract_images_from_html(content_html):
-                        norm = Logic4KHD.normalize_image_url(img_url, for_thumbnail=False)
-                        if norm and norm not in all_images:
-                            all_images.append(norm)
-
-                    post_link = post['link']
-                    parsed_link = urlparse(post_link)
-                    if '4khd.com' in parsed_link.netloc:
-                        post_link = post_link.replace(parsed_link.scheme + '://' + parsed_link.netloc, real_base)
-                        
-                    item = {
-                        'id': post['id'],
-                        'title': post['title']['rendered'],
-                        'url': post_link,
-                        'thumbnail': '',
-                        'images': all_images,  # ★ API에서 직접 추출한 이미지 목록
-                    }
-                    try:
-                        thumb = None
-                        embedded = post.get('_embedded', {})
-                        if 'wp:featuredmedia' in embedded:
-                            thumb = embedded['wp:featuredmedia'][0]['source_url']
-                        if not thumb and all_images:
-                            thumb = all_images[0]
-                        item['thumbnail'] = Logic4KHD.normalize_image_url(thumb, for_thumbnail=True)
-                    except:
-                        pass
-                    results.append(item)
-                return results
-
             return Logic4KHD.parse_html_list(real_base, page, search, category)
-        except:
-            return Logic4KHD.parse_html_list(real_base, page, search, category)
+        except Exception as e:
+            print(f"[4KHD] get_list error: {e}")
+            return []
 
-    @staticmethod
     def extract_images_from_html(html):
         """HTML에서 이미지 URL 추출 (Lazy loading 대응)"""
         if not html: return []
