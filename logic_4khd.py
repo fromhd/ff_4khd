@@ -213,10 +213,15 @@ class Logic4KHD:
                         if norm and norm not in all_images:
                             all_images.append(norm)
 
+                    post_link = post['link']
+                    parsed_link = urlparse(post_link)
+                    if '4khd.com' in parsed_link.netloc:
+                        post_link = post_link.replace(parsed_link.scheme + '://' + parsed_link.netloc, real_base)
+                        
                     item = {
                         'id': post['id'],
                         'title': post['title']['rendered'],
-                        'url': post['link'],
+                        'url': post_link,
                         'thumbnail': '',
                         'images': all_images,  # ★ API에서 직접 추출한 이미지 목록
                     }
@@ -339,7 +344,7 @@ class Logic4KHD:
         try:
             if session is None:
                 session = Logic4KHD.get_session()
-            base_url = url.rstrip('/')
+            base_url = Logic4KHD._base_from_url(url) or url.rstrip('/')
 
             def get_page_data(target_url):
                 try:
