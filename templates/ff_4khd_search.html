@@ -87,7 +87,8 @@ $(document).ready(function(){
     });
     
     $(document).on('click', '.gallery-img', function(){
-        window.open($(this).attr('src'), '_blank');
+        let target = $(this).attr('data-original') || $(this).attr('src');
+        window.open(target, '_blank');
     });
 
     $("#btn_download_all").click(function(){
@@ -232,10 +233,11 @@ function showDetail(url) {
                 
                 let displayImages = detail.proxy_images || detail.images;
                 if (displayImages.length > 0) {
-                    displayImages.forEach(img => {
+                    displayImages.forEach((img, idx) => {
+                        let originalUrl = (detail.images && detail.images[idx]) ? detail.images[idx] : img;
                         $("#image_gallery").append(`
                             <div class="col-12 text-center">
-                                <img src="${img}" class="gallery-img mb-1" loading="lazy">
+                                <img src="${img}" data-original="${originalUrl}" class="gallery-img mb-1" loading="lazy">
                             </div>
                         `);
                     });

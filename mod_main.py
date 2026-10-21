@@ -243,21 +243,11 @@ class ModuleMain(PluginModuleBase):
     def _proxy(self, req):
         target_url = req.args.get('url')
         if not target_url: return "No URL", 400
+        target_url = Logic4KHD.normalize_image_url(target_url)
         headers = {'User-Agent': 'Mozilla/5.0', 'Referer': self.P.ModelSetting.get('4khd_url') or Logic4KHD.BASE_URL}
         
         try:
-            session = Logic4KHD.get_session()
-            res = None
-            try:
-                res = session.get(target_url, headers=headers, stream=True, timeout=10)
-            except:
-                try:
-                    import urllib3
-                    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-                    res = session.get(target_url, headers=headers, stream=True, timeout=10, verify=False)
-                except Exception as e:
-                    return str(e), 500
-            
+            res = requests.get(target_url, headers=headers, stream=True, timeout=15)
             if not res or res.status_code >= 400:
                 return "Target Error", res.status_code if res else 500
             
