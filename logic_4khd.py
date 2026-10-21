@@ -324,7 +324,9 @@ class Logic4KHD:
         try:
             if session is None:
                 session = Logic4KHD.get_session()
-            base_url = Logic4KHD._base_from_url(url) or url.rstrip('/')
+            parsed_input = urlparse(url)
+            root_base = f"{parsed_input.scheme}://{parsed_input.netloc}".rstrip('/')
+            base_url = Logic4KHD._base_from_url(url) or root_base
 
             def get_page_data(target_url):
                 try:
@@ -398,7 +400,12 @@ class Logic4KHD:
                 if href:
                     parsed_href = urlparse(href)
                     if '4khd.com' in parsed_href.netloc:
-                        href = href.replace(parsed_href.scheme + '://' + parsed_href.netloc, base_url)
+                        href = href.replace(f"{parsed_href.scheme}://{parsed_href.netloc}", root_base)
+                    elif not parsed_href.netloc:
+                        from urllib.parse import urljoin
+                        href = urljoin(root_base, href)
+                    elif parsed_href.netloc != parsed_input.netloc:
+                        href = href.replace(f"{parsed_href.scheme}://{parsed_href.netloc}", root_base)
                     if href not in page_urls:
                         page_urls.append(href)
             page_urls = sorted(list(set(page_urls)))
