@@ -30,9 +30,13 @@ class ModuleMain(PluginModuleBase):
         self.download_status = {} # {url: {current: 0, total: 0, status: 'ready'}}
         default_route_socketio_module(self)
 
+    def _is_proxy_enabled(self):
+        return str(self.P.ModelSetting.get('proxy_enabled')).lower() in ['true', 'on', '1']
+
     def process_menu(self, sub, req):
         arg = self.P.ModelSetting.to_dict()
         arg['package_name'] = self.P.package_name
+        arg['proxy_enabled'] = 'True' if self._is_proxy_enabled() else 'False'
         
         # 메뉴 설정
         menu_map = {
@@ -77,7 +81,7 @@ class ModuleMain(PluginModuleBase):
                 category = req.form.get('category', '')
                 base_url = self._get_effective_base_url()
                 data = Logic4KHD.get_list(base_url=base_url, page=page, search=search, category=category)
-                if self.P.ModelSetting.get_bool('proxy_enabled'):
+                if self._is_proxy_enabled():
                     for item in data:
                         if item.get('thumbnail'):
                             item['thumbnail'] = self._make_proxy_url(item['thumbnail'])
@@ -87,7 +91,7 @@ class ModuleMain(PluginModuleBase):
                 url = req.form.get('url')
                 data = Logic4KHD.get_detail(url)
                 if data:
-                    if self.P.ModelSetting.get_bool('proxy_enabled'):
+                    if self._is_proxy_enabled():
                         # 원본 URL 보존을 위해 별도 리스트 생성 후 프록시 적용
                         data['proxy_images'] = [self._make_proxy_url(img) for img in data['images']]
                     return jsonify({'ret': 'success', 'data': data})
@@ -207,9 +211,6 @@ class ModuleMain(PluginModuleBase):
         return Logic4KHD.BASE_URL
 
     def _setting_request_with_defaults(self, req):
-        if 'proxy_enabled' in req.form:
-            return req
-
         from werkzeug.datastructures import MultiDict
 
         class RequestProxy:
@@ -221,7 +222,8 @@ class ModuleMain(PluginModuleBase):
                 return getattr(self._original, name)
 
         form = MultiDict(req.form)
-        form['proxy_enabled'] = 'False'
+        val = str(form.get('proxy_enabled', '')).lower()
+        form['proxy_enabled'] = 'True' if val in ['true', 'on', '1'] else 'False'
         return RequestProxy(req, form)
 
     def _set_setting(self, key, value):
